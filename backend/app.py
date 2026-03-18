@@ -11,7 +11,6 @@ app = FastAPI(
     description="RAG-powered news summarisation with vector search",
     version="1.0.0",
 )
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,7 +18,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.include_router(news_router, prefix="/api/news", tags=["News"])
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 
