@@ -1,6 +1,4 @@
 from api.schemas import ArticleOut
-
-
 def articles_to_chunks(
     articles: list[ArticleOut],
     chunk_size: int = 300,
@@ -10,9 +8,8 @@ def articles_to_chunks(
 
     for article in articles:
         passage = " ".join(filter(None, [article.title, article.description])).strip()
-        if not passage:
+        if not passage: 
             continue
-
         start       = 0
         chunk_index = 0
 
