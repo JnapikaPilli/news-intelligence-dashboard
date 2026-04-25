@@ -85,4 +85,5 @@ def process_and_store_news():
     logger.info("Successfully fetched, classified, and stored news.")
 
 if __name__ == "__main__":
+    init_db() # Ensure DB exists before anything else
     process_and_store_news()

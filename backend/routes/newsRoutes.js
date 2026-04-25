@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const newsController = require('../controllers/newsController');
 
+// GET /api/news
 router.get('/', newsController.getNews);
-router.get('/trending', newsController.getTrendingNews);
-router.get('/category/:category', newsController.getNewsByCategory);
+
+// GET /api/news/:id
 router.get('/:id', newsController.getNewsById);
 
 module.exports = router;

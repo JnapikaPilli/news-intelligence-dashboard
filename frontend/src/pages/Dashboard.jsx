@@ -1,173 +1,79 @@
-import React, { useState } from 'react';
-import './Dashboard.css';
+import React, { useEffect } from 'react';
+import { useStore } from '../store/useStore';
+import { newsService } from '../services/api';
+import NewsCard from '../components/NewsCard';
+import { RefreshCw, TrendingUp } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function Dashboard() {
-  const [activeCategory, setActiveCategory] = useState('general');
-  const [news, setNews] = useState([
-    { id: 1, title: 'Global Markets Rally Amid Positive Tech Earnings', summary: 'Stock markets around the world saw significant gains today as major tech companies reported better-than-expected earnings for the third quarter.', category: 'general', source: 'Financial Times', sentiment: 'positive' },
-    { id: 2, title: 'Local Team Wins Championship After 20 Years', summary: 'In a stunning upset, the home team secured the league championship trophy last night, ending a two-decade drought and sparking city-wide celebrations.', category: 'sports', source: 'Local Daily', sentiment: 'neutral' }
-  ]);
-  const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', content: 'Hello! I am your AI News Assistant. Upload a PDF or ask me about the news.' }
-  ]);
-  const [chatInput, setChatInput] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
+  const { news, setNews, isLoadingNews, setIsLoadingNews } = useStore();
 
-  const handleChatSubmit = (e) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
-    setChatMessages([...chatMessages, { role: 'user', content: chatInput }]);
-    setTimeout(() => {
-      setChatMessages(prev => [...prev, { role: 'assistant', content: 'This is a mocked RAG response providing simple bullet points context.' }]);
-    }, 1000);
-    setChatInput('');
-  };
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setIsUploading(true);
-      setChatMessages(prev => [...prev, { role: 'system', content: `Uploading ${file.name} for RAG analysis...` }]);
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      try {
-        const response = await fetch('http://localhost:5000/api/rag/upload', {
-          method: 'POST',
-          body: formData
-        });
-        const data = await response.json();
-        
-        if (response.ok) {
-           setChatMessages(prev => [...prev, { role: 'system', content: `Success: ${file.name} uploaded to memory.` }]);
-        } else {
-           setChatMessages(prev => [...prev, { role: 'system', content: `Error uploading ${file.name}: ${data.error || 'Unknown error'}` }]);
-        }
-      } catch (err) {
-         setChatMessages(prev => [...prev, { role: 'system', content: `Connection error: ${err.message}` }]);
-      } finally {
-        setIsUploading(false);
-      }
+  const fetchNews = async () => {
+    setIsLoadingNews(true);
+    try {
+      const data = await newsService.getNews();
+      setNews(data);
+    } catch (error) {
+      console.error("Failed to fetch news:", error);
+    } finally {
+      setIsLoadingNews(false);
     }
   };
 
+  useEffect(() => {
+    fetchNews();
+  }, []);
+
   return (
-    <div className="dashboard-container">
-      
-      {/* LEFT SIDEBAR */}
-      <aside className="sidebar">
+    <div className="max-w-7xl mx-auto pb-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
         <div>
-          <h1 className="brand">NewsLens</h1>
-          <nav>
-            <p className="category-title">Categories</p>
-            <ul className="category-list">
-              {['General', 'Business', 'Technology', 'Sports', 'Entertainment', 'Health'].map((cat) => (
-                <li key={cat}>
-                  <button 
-                    onClick={() => setActiveCategory(cat.toLowerCase())}
-                    className={`category-btn ${activeCategory === cat.toLowerCase() ? 'active' : ''}`}
-                  >
-                    {cat}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
+          <h1 className="text-3xl font-bold tracking-tight mb-2">Real-Time Intelligence</h1>
+          <p className="text-foreground/60 flex items-center">
+            <TrendingUp size={18} className="mr-2 text-green-500" />
+            AI-curated insights from global sources
+          </p>
         </div>
-        <div>
-          <button className="lang-btn">
-            English (Language)
-          </button>
-        </div>
-      </aside>
+        <button 
+          onClick={fetchNews}
+          disabled={isLoadingNews}
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white font-medium rounded-xl shadow-lg shadow-primary/20 hover:bg-primary-hover hover:shadow-xl transition-all disabled:opacity-50 active:scale-95"
+        >
+          <RefreshCw size={18} className={isLoadingNews ? "animate-spin" : ""} />
+          <span>Refresh Feed</span>
+        </button>
+      </div>
 
-      {/* CENTER PANEL: Live News Feed */}
-      <main className="main-feed">
-        <header className="feed-header">
-          <h2>
-            <span className="pulse-dot"></span>
-            Real-Time {activeCategory} News
-          </h2>
-        </header>
-
-        <div className="feed-content">
-          <div className="news-card-wrapper">
-            {news.map((item, idx) => (
-              <div 
-                key={item.id} 
-                className="news-card"
-                style={{ animationDelay: `${idx * 0.1}s` }}
-              >
-                <div className="news-header">
-                  <h3 className="news-title">{item.title}</h3>
-                  <span className={`sentiment-badge sentiment-${item.sentiment}`}>
-                    {item.sentiment}
-                  </span>
-                </div>
-                <p className="news-summary">{item.summary}</p>
-                <div className="news-footer">
-                  <span className="news-source">
-                    📰 {item.source}
-                  </span>
-                  <button className="news-link">
-                    View Details →
-                  </button>
-                </div>
+      {isLoadingNews ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="glass-card p-5 h-80 animate-pulse flex flex-col">
+              <div className="flex justify-between mb-4">
+                <div className="w-20 h-5 bg-foreground/10 rounded-full"></div>
+                <div className="w-16 h-4 bg-foreground/10 rounded"></div>
               </div>
-            ))}
-          </div>
-        </div>
-      </main>
-
-      {/* RIGHT PANEL: AI Assistant */}
-      <aside className="assistant-panel">
-        
-        <div className="chat-header">
-          <div className="chat-header-title">
-            <div className="ai-icon">
-              ⭐
-            </div>
-            <h3>AI Intelligence</h3>
-          </div>
-          <p className="chat-desc">RAG-powered conversational analytics</p>
-          
-          <label className={`upload-box ${isUploading ? 'disabled' : ''}`}>
-             <span>{isUploading ? 'Processing...' : '📄 Upload PDF Document'}</span>
-            <input type="file" onChange={handleFileUpload} disabled={isUploading} />
-          </label>
-        </div>
-
-        <div className="chat-area">
-          {chatMessages.map((msg, idx) => (
-            <div key={idx} className={`chat-msg-wrapper ${msg.role}`}>
-              <div className={`chat-bubble ${msg.role}`}>
-                {msg.content}
+              <div className="w-full h-6 bg-foreground/10 rounded mb-2"></div>
+              <div className="w-3/4 h-6 bg-foreground/10 rounded mb-6"></div>
+              <div className="w-1/3 h-4 bg-foreground/10 rounded mb-4"></div>
+              <div className="space-y-3 flex-1">
+                <div className="w-full h-4 bg-foreground/10 rounded"></div>
+                <div className="w-full h-4 bg-foreground/10 rounded"></div>
+                <div className="w-5/6 h-4 bg-foreground/10 rounded"></div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-border/50 flex justify-between">
+                <div className="w-24 h-4 bg-foreground/10 rounded"></div>
+                <div className="w-6 h-6 bg-foreground/10 rounded-full"></div>
               </div>
             </div>
           ))}
         </div>
-
-        <div className="chat-input-area">
-          <form onSubmit={handleChatSubmit} className="chat-form">
-            <input 
-              type="text" 
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Ask a question..." 
-              className="chat-input"
-            />
-            <button 
-              type="submit" 
-              disabled={!chatInput.trim()}
-              className={`chat-submit ${chatInput.trim() ? 'active' : 'disabled'}`}
-            >
-              ↑
-            </button>
-          </form>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {news.map((item, index) => (
+            <NewsCard key={item.id} article={item} delay={index * 0.05} />
+          ))}
         </div>
-
-      </aside>
-
+      )}
     </div>
   );
 }

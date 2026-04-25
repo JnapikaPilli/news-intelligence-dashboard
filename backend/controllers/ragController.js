@@ -1,50 +1,105 @@
 const axios = require('axios');
-const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://localhost:8000';
-
 const fs = require('fs');
 const FormData = require('form-data');
 
+const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://localhost:8000';
+
 exports.uploadFile = async (req, res) => {
     try {
-        if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+        console.log("Incoming file upload to backend:", req.file);
+        
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: "No file uploaded" });
+        }
         
         const form = new FormData();
         form.append('file', fs.createReadStream(req.file.path), req.file.originalname);
+        
+        console.log(`Forwarding file ${req.file.originalname} to FastAPI at ${RAG_SERVICE_URL}/upload`);
 
         const response = await axios.post(`${RAG_SERVICE_URL}/upload`, form, {
-            headers: {
-                ...form.getHeaders()
-            }
+            headers: form.getHeaders()
         });
         
-        // Clean up multer temp file
-        fs.unlinkSync(req.file.path);
+        console.log("Response from FastAPI:", response.data);
         
-        res.json(response.data);
+        // Clean up multer temp file safely
+        try {
+            if (fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+        } catch (cleanupErr) {
+            console.warn("Could not delete temp file:", cleanupErr.message);
+        }
+        
+        // Return exactly what FastAPI returned to satisfy test requirement
+        return res.status(200).json(response.data);
+
     } catch (error) {
-        if (req.file) fs.unlinkSync(req.file.path);
-        res.status(500).json({ error: error.response?.data?.detail || error.message });
+        try {
+            if (req.file && fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+        } catch (cleanupErr) {
+            console.warn("Could not delete temp file in catch:", cleanupErr.message);
+        }
+        
+        console.error("RAG Upload Error:", error.response?.data || error.message);
+        return res.status(500).json({ 
+            success: false, 
+            error: error.response?.data?.detail || "An error occurred while uploading to the RAG service." 
+        });
     }
 };
 
 exports.queryContent = async (req, res) => {
     try {
         const { query, documentId } = req.body;
-        // const response = await axios.post(`${RAG_SERVICE_URL}/query`, { query, documentId });
-        // res.json(response.data);
-        res.json({ answer: ["Simulated short bullet 1", "Simulated bullet 2"] });
+        
+        if (!query) {
+            return res.status(400).json({ success: false, error: "Query is required." });
+        }
+
+        const response = await axios.post(`${RAG_SERVICE_URL}/query`, { query, documentId });
+        
+        // Prepare clean response
+        return res.status(200).json({
+            success: true,
+            answer: response.data.answer,
+            source_titles: response.data.source_titles || [],
+            source_chunks: response.data.source_chunks || [],
+            page_numbers: response.data.page_numbers || []
+        });
+
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("RAG Query Error:", error.message);
+        return res.status(500).json({ 
+            success: false, 
+            error: error.response?.data?.detail || "An error occurred while querying the RAG service." 
+        });
     }
 };
 
 exports.summarizeSection = async (req, res) => {
     try {
         const { section, documentId } = req.body;
-        // const response = await axios.post(`${RAG_SERVICE_URL}/summarize`, { section, documentId });
-        // res.json(response.data);
-        res.json({ summary: ["Section summary 1", "Section summary 2"] });
+        
+        if (!section) {
+            return res.status(400).json({ success: false, error: "Section text is required." });
+        }
+
+        const response = await axios.post(`${RAG_SERVICE_URL}/summarize-section`, { section, documentId });
+        
+        return res.status(200).json({
+            success: true,
+            summary: response.data.summary
+        });
+
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("RAG Summarize Error:", error.message);
+        return res.status(500).json({ 
+            success: false, 
+            error: error.response?.data?.detail || "An error occurred while summarizing the section." 
+        });
     }
 };

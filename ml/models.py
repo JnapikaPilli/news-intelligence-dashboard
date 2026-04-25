@@ -1,26 +1,22 @@
-from transformers import pipeline
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Lazy loading models
-_summarizer = None
-_translator = None
+_model = None
+_tokenizer = None
 _classifier = None
 
 def get_summarizer():
-    global _summarizer
-    if _summarizer is None:
-        logger.info("Loading Summarization Model (BART-large-cnn)...")
-        _summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
-    return _summarizer
-
-def get_translator():
-    global _translator
-    if _translator is None:
-        pass # placeholder - translation models are heavy, might use m2m100 or skipping for lightweight MVP
-    return _translator
+    global _model, _tokenizer
+    if _model is None or _tokenizer is None:
+        logger.info("Loading Summarization Model (t5-small)...")
+        model_name = "t5-small"
+        _tokenizer = AutoTokenizer.from_pretrained(model_name)
+        _model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    return _model, _tokenizer
 
 def get_classifier():
     global _classifier
@@ -29,16 +25,32 @@ def get_classifier():
         _classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
     return _classifier
 
-def summarize_text(text: str, max_length: int = 130, min_length: int = 30) -> list:
-    """Returns a summarized text broken into bullet points."""
-    summarizer = get_summarizer()
-    summary = summarizer(text, max_length=max_length, min_length=min_length, do_sample=False)
-    # Simple logic to split sentences into bullets
-    summary_text = summary[0]['summary_text']
-    bullets = [sentence.strip() + "." for sentence in summary_text.split('.') if len(sentence) > 10]
-    return bullets[:5] # Max 5 bullets
+def summarize_text(text: str, max_length: int = 150, min_length: int = 40) -> list:
+    """Returns a summarized text broken into bullet points using t5-small."""
+    model, tokenizer = get_summarizer()
+    
+    # Prepend summarize prompt for t5
+    input_text = "summarize: " + text
+    
+    # Truncate text roughly to avoid max token errors
+    input_text = input_text[:2000] 
+    
+    inputs = tokenizer(input_text, return_tensors="pt", max_length=512, truncation=True)
+    outputs = model.generate(
+        **inputs, 
+        max_length=max_length, 
+        min_length=min_length, 
+        do_sample=False
+    )
+    summary_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    
+    # Simple logic to split sentences into bullets, cleaning up punctuation
+    bullets = [sentence.strip().capitalize() + "." for sentence in summary_text.replace("..", ".").split('.') if len(sentence.strip()) > 10]
+    
+    # Ensure simple language & 5 points max
+    return bullets[:5]
 
 def classify_text(text: str, candidate_labels: list) -> str:
     classifier = get_classifier()
     result = classifier(text, candidate_labels)
-    return result['labels'][0] # Return the most likely label
+    return result['labels'][0]

@@ -1,14 +1,60 @@
-/* Base styles */
-body {
-  margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #f0f4f8;
+    --foreground: #0f172a;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --card: rgba(255, 255, 255, 0.7);
+    --card-foreground: #0f172a;
+    --border: rgba(0, 0, 0, 0.05);
+    --accent: #dbeafe;
+    --gradient-bg: linear-gradient(135deg, #f0f4f8 0%, #e0f2fe 100%);
+  }
+
+  .dark {
+    --background: #020617;
+    --foreground: #f8fafc;
+    --primary: #3b82f6;
+    --primary-hover: #60a5fa;
+    --card: rgba(15, 23, 42, 0.6);
+    --card-foreground: #f8fafc;
+    --border: rgba(255, 255, 255, 0.08);
+    --accent: #1e293b;
+    --gradient-bg: linear-gradient(135deg, #020617 0%, #0f172a 100%);
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased transition-colors duration-300 font-sans;
+    background-image: var(--gradient-bg);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+@layer utilities {
+  .glass {
+    @apply bg-card backdrop-blur-xl border border-border shadow-xl;
+  }
+  .glass-panel {
+    @apply bg-card backdrop-blur-md border border-border rounded-2xl shadow-lg;
+  }
+  .glass-card {
+    @apply bg-card backdrop-blur-sm border border-border rounded-xl shadow-md hover:shadow-xl transition-all duration-300;
+  }
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-500;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
