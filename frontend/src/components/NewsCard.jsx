@@ -1,23 +1,53 @@
-import React, { useState } from 'react';
-import { Clock, ExternalLink, ChevronRight, Loader2, Volume2, Sparkles, Globe, RefreshCcw } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Clock, ExternalLink, ChevronRight, Loader2, Volume2, Sparkles, Globe, RefreshCcw, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ragService } from '../services/api';
 import clsx from 'clsx';
 
 function ListenButton({ text }) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
   
-  const handleListen = async () => {
+  const handleListen = async (e) => {
+    e.stopPropagation(); // Prevent card click
+
+    // If already playing, stop it
+    if (isPlaying && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsPlaying(false);
+      return;
+    }
+
     if (!text || isGenerating) return;
+    
     setIsGenerating(true);
     try {
       const res = await ragService.generateTTS(text);
       if (res.audio) {
         const audio = new Audio(`data:audio/wav;base64,${res.audio}`);
-        audio.play();
+        audioRef.current = audio;
+        
+        audio.onended = () => setIsPlaying(false);
+        audio.onpause = () => setIsPlaying(false);
+        
+        await audio.play();
+        setIsPlaying(true);
       }
     } catch (err) {
       console.error("TTS Error:", err);
+      setIsPlaying(false);
     } finally {
       setIsGenerating(false);
     }
@@ -27,16 +57,20 @@ function ListenButton({ text }) {
     <button 
       onClick={handleListen}
       disabled={isGenerating}
-      title="Listen to summary"
+      title={isPlaying ? "Stop Listening" : "Listen to summary"}
       className={clsx(
-        "flex items-center justify-center p-1.5 rounded-full transition-all",
+        "flex items-center justify-center p-1.5 rounded-full transition-all border shadow-sm",
         isGenerating 
           ? "bg-primary/20 text-primary animate-pulse cursor-wait" 
-          : "bg-primary/10 text-primary hover:bg-primary hover:text-white border border-primary/20"
+          : isPlaying
+            ? "bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500 hover:text-white"
+            : "bg-primary/10 text-primary hover:bg-primary hover:text-white border-primary/20"
       )}
     >
       {isGenerating ? (
         <Loader2 size={12} className="animate-spin" />
+      ) : isPlaying ? (
+        <Square size={12} className="fill-current" />
       ) : (
         <Volume2 size={12} />
       )}
@@ -124,20 +158,10 @@ export default function NewsCard({ article, delay = 0 }) {
           </span>
           <ListenButton text={`${displayTitle}. ${displayBullets.join(' ')}`} />
         </div>
-        <div className="flex items-center gap-3">
-           {translatedData && (
-              <button 
-                onClick={() => setShowOriginal(!showOriginal)}
-                className="text-[10px] font-bold text-primary hover:underline transition-all flex items-center gap-1"
-              >
-                <RefreshCcw size={10} /> {showOriginal ? 'Show Translated' : 'Show Original'}
-              </button>
-           )}
-           <div className="flex items-center text-foreground/50 text-xs font-medium">
+          <div className="flex items-center text-foreground/50 text-xs font-medium">
             <Clock size={12} className="mr-1" />
             {new Date(article.published_at).toLocaleDateString()}
           </div>
-        </div>
       </div>
       
       <h3 className="font-bold text-lg mb-2 leading-tight group-hover:text-primary transition-colors line-clamp-2">
@@ -183,8 +207,22 @@ export default function NewsCard({ article, delay = 0 }) {
           Read Analysis <ChevronRight size={16} className="ml-1 group-hover:translate-x-1 transition-transform" />
         </button>
         
-        <div className="flex items-center gap-2">
-          <div className="relative">
+          <div className="relative flex items-center gap-2">
+            {translatedData && (
+              <button 
+                onClick={() => setShowOriginal(!showOriginal)}
+                className={clsx(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border",
+                  showOriginal 
+                    ? "bg-primary/10 text-primary border-primary/20" 
+                    : "bg-foreground/5 text-foreground/60 border-border/50"
+                )}
+              >
+                <RefreshCcw size={12} className={clsx(!showOriginal && "animate-spin-slow")} />
+                {showOriginal ? 'Translate Back' : 'Show Original'}
+              </button>
+            )}
+
             <button 
               onClick={() => setShowTranslateMenu(!showTranslateMenu)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-foreground/5 text-foreground/60 hover:text-primary hover:bg-primary/5 rounded-full text-[10px] font-bold transition-all border border-border/50 hover:border-primary/30"
@@ -220,7 +258,6 @@ export default function NewsCard({ article, delay = 0 }) {
             </a>
           )}
         </div>
-      </div>
-    </motion.div>
-  );
+      </motion.div>
+    );
 }

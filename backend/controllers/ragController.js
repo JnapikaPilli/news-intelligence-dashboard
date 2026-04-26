@@ -146,7 +146,7 @@ exports.generateTTS = async (req, res) => {
 
 exports.translateText = async (req, res) => {
     try {
-        const { text, target_language } = req.body;
+        const { text, target_language, use_premium } = req.body;
         
         if (!text || !target_language) {
             return res.status(400).json({ success: false, error: "Text and target_language are required." });
@@ -154,7 +154,8 @@ exports.translateText = async (req, res) => {
 
         const response = await axios.post(`${RAG_SERVICE_URL}/translate`, { 
             text: Array.isArray(text) ? text : [text],
-            target_language 
+            target_language,
+            use_premium: !!use_premium
         });
         
         return res.status(200).json({

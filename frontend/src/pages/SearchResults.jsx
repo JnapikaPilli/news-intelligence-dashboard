@@ -62,7 +62,7 @@ export default function SearchResults() {
                 <Search className="mr-2" size={18} />
                 <h2 className="font-bold uppercase tracking-widest text-[10px]">Synthesized Intelligence Report</h2>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+              <div className="grid grid-cols-1 gap-y-4">
                 {searchResults.global_summary.map((point, i) => (
                   <motion.div 
                     key={i}

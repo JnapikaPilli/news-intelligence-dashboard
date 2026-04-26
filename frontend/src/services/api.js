@@ -30,5 +30,5 @@ export const ragService = {
   query: (query, documentId, language = 'en') => api.post('/rag/query', { query, documentId, language }).then(res => res.data),
   generateTTS: (text) => api.post('/rag/tts', { text }).then(res => res.data),
   summarize: (section, language = 'en') => api.post('/rag/summarize-section', { section, language }).then(res => res.data),
-  translate: (text, target_language) => api.post('/rag/translate', { text, target_language }).then(res => res.data),
+  translate: (text, target_language, use_premium = false) => api.post('/rag/translate', { text, target_language, use_premium }).then(res => res.data),
 };

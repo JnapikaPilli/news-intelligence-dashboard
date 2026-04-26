@@ -9,7 +9,7 @@ import logging
 
 # Add root folder to sys path to import ml
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from ml.models import summarize_text, answer_question, generate_speech, translate_text, warm_up
+from ml.models import summarize_text, answer_question, generate_speech, translate_text, clean_news_content, warm_up
 from services.vector_store import vector_store, VectorStore
 from services.pdf_extractor import extract_text_from_pdf, chunk_text
 
@@ -59,6 +59,7 @@ class BatchSummarizeRequest(BaseModel):
 class TranslateRequest(BaseModel):
     text: List[str]
     target_language: str
+    use_premium: bool = False
 
 @app.post("/translate")
 async def translate_endpoint(request: TranslateRequest):
@@ -105,33 +106,36 @@ async def search_rag(request: SearchRAGRequest):
     3. Returns a combined summary and the IDs of top articles
     """
     try:
-        print(f"--- Processing Search RAG: {request.query} ({request.language}) ---")
+        logger.info(f"--- Processing Search RAG: {request.language} ---")
         
         if not request.articles:
-            print("WARNING: No articles provided for search RAG")
+            logger.warning("No articles provided for search RAG")
             return {"summary": ["No articles provided for analysis."], "top_ids": [], "language": request.language}
         
         # Create temporary store sharing the model
-        print("DEBUG: Creating temp_store with shared model...")
         temp_store = VectorStore(model=vector_store.model)
         
         # Index articles
-        texts = [a.text for a in request.articles]
+        texts = [clean_news_content(a.text) for a in request.articles]
         metadata = [{"id": a.id} for a in request.articles]
-        print(f"DEBUG: Indexing {len(texts)} articles...")
+        logger.info(f"Indexing {len(texts)} articles into temporary store...")
         temp_store.add_texts(texts, metadata)
         
-        # Search for top 5 relevant chunks
-        print(f"DEBUG: Searching for top 5 chunks for query: {request.query}")
-        results = temp_store.search(request.query, k=5)
+        # Search for top 10 relevant chunks to ensure broad context
+        results = temp_store.search(request.query, k=10)
         
         if not results:
-            print("WARNING: No results from temp_store.search")
+            logger.warning("No relevant insights found in articles.")
             return {"summary": ["No relevant insights found in articles."], "top_ids": [], "language": request.language}
             
         context_text = " ".join([r['chunk'] for r in results])
-        print(f"DEBUG: Summarizing {len(context_text)} chars of context...")
-        bullet_points = summarize_text(context_text, max_length=200, min_length=60)
+        logger.info(f"Synthesizing high-density intelligence for query...")
+        bullet_points = summarize_text(
+            context_text, 
+            max_length=450, 
+            min_length=200,
+            prompt_prefix=f"Synthesize a detailed strategic intelligence report on '{request.query}' with AT LEAST 5 bullet points. Focus on facts, trends, and business impact from these news sources: "
+        )
         
         # Translation Step
         if request.language != "en":
@@ -139,7 +143,7 @@ async def search_rag(request: SearchRAGRequest):
         
         # Collect unique article IDs that were most relevant
         top_ids = list(dict.fromkeys([r['metadata']['id'] for r in results]))
-        print(f"SUCCESS: Search RAG complete. Top IDs: {top_ids[:5]}")
+        logger.info("Search RAG complete successfully.")
         
         return {
             "summary": bullet_points,
@@ -155,35 +159,30 @@ async def search_rag(request: SearchRAGRequest):
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
     try:
-        print(f"--- Processing Upload: {file.filename} ---")
+        logger.info(f"--- Processing Upload: {file.filename} ---")
         
         file_bytes = await file.read()
         pages_data = extract_text_from_pdf(file_bytes)
         
         if not pages_data:
-            print("ERROR: No text extracted from PDF")
+            logger.error("No text extracted from PDF")
             raise HTTPException(status_code=400, detail="No searchable text found in this PDF. It appears to be a scanned document or image-based file.")
             
-        # Print extracted text sample
         full_text = " ".join([p["text"] for p in pages_data])
-        print(f"INFO: Extracted {len(full_text)} chars across {len(pages_data)} pages")
-        print(f"Sample: {full_text[:300]}...")
+        logger.info(f"Extracted {len(full_text)} chars across {len(pages_data)} pages")
             
         chunks_with_meta = chunk_text(pages_data, chunk_size=400)
         chunks = [c["chunk"] for c in chunks_with_meta]
         metadata = [{"source": file.filename, "type": "pdf", "page": c["page"]} for c in chunks_with_meta]
         
-        print(f"INFO: Generated {len(chunks)} text chunks")
+        logger.info(f"Generated {len(chunks)} text chunks")
         
         if not chunks:
-            print("WARNING: No valid chunks generated from extraction")
+            logger.warning("No valid chunks generated from extraction")
             return {"message": "Document received but no valid text chunks were found.", "chunks": 0}
             
-        # Clear old index for this MVP (Optional, but usually better for single-doc QA)
-        # vector_store.clear() # If you want to start fresh every time
-        
         vector_store.add_texts(chunks, metadata)
-        print("SUCCESS: Vector store updated")
+        logger.info("Vector store updated successfully")
         
         return {
             "message": "Document processed and stored successfully", 
@@ -208,10 +207,11 @@ async def query_document(request: QueryRequest):
     if not results:
         return {"answer": ["No relevant context found."], "source_chunks": [], "page_numbers": []}
         
-    print("\n--- RAG RETRIEVAL SCORES ---")
-    for r in results:
-        print(f"Score: {r['distance']:.4f} | Chunk: {r['chunk'][:60]}...")
-    print("-------------------------\n")
+    # Removed debug print to avoid Windows encoding issues with special characters (e.g. ₹)
+    # print("\n--- RAG RETRIEVAL SCORES ---")
+    # for r in results:
+    #     print(f"Score: {r['distance']:.4f} | Chunk: {r['chunk'][:60]}...")
+    # print("-------------------------\n")
     
     context_text = " ".join([r['chunk'] for r in results])
     

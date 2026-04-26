@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Loader2, Sparkles, BookOpen, AlertCircle, FileDigit, BarChart, Volume2, Globe, RefreshCcw } from 'lucide-react';
+import { Send, Bot, Loader2, Sparkles, BookOpen, AlertCircle, FileDigit, BarChart, Volume2, Globe, RefreshCcw, Square } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { ragService } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,18 +13,51 @@ const EXAMPLE_QUERIES = [
 
 function ListenButton({ text }) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef(null);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
   
   const handleListen = async () => {
+    // If already playing, stop it
+    if (isPlaying && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsPlaying(false);
+      return;
+    }
+
     if (!text || isGenerating) return;
+    
     setIsGenerating(true);
     try {
       const res = await ragService.generateTTS(text);
       if (res.audio) {
         const audio = new Audio(`data:audio/wav;base64,${res.audio}`);
-        audio.play();
+        audioRef.current = audio;
+        
+        audio.onended = () => {
+          console.log("Audio ended naturally");
+          setIsPlaying(false);
+        };
+        audio.onpause = () => setIsPlaying(false);
+        
+        // Start playing and immediately show stop button
+        await audio.play();
+        setIsPlaying(true);
+        console.log("Audio playing, showing stop button");
       }
     } catch (err) {
       console.error("TTS Error:", err);
+      setIsPlaying(false);
     } finally {
       setIsGenerating(false);
     }
@@ -38,21 +71,26 @@ function ListenButton({ text }) {
         "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm",
         isGenerating 
           ? "bg-primary/20 text-primary animate-pulse cursor-wait" 
-          : "bg-primary/10 text-primary hover:bg-primary hover:text-white border border-primary/20"
+          : isPlaying
+            ? "bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white"
+            : "bg-primary/10 text-primary hover:bg-primary hover:text-white border border-primary/20"
       )}
     >
       {isGenerating ? (
         <Loader2 size={12} className="animate-spin" />
+      ) : isPlaying ? (
+        <Square size={12} className="fill-current" />
       ) : (
         <Volume2 size={12} />
       )}
-      {isGenerating ? "Generating Voice..." : "Listen"}
+      {isGenerating ? "Generating Voice..." : isPlaying ? "Stop Listening" : "Listen"}
     </button>
   );
 }
 
 export default function ChatBox() {
   const { chatHistory, addChatMessage, currentDocumentId, isChatLoading, setIsChatLoading, language } = useStore();
+  const [translatingIdx, setTranslatingIdx] = useState(null);
   const [input, setInput] = useState('');
   const endOfMessagesRef = useRef(null);
 
@@ -222,28 +260,38 @@ export default function ChatBox() {
                           <Globe size={10} /> Translate
                         </button>
                         
-                        <div className="absolute right-0 top-full mt-1 hidden group-hover/menu:block glass-panel py-1 z-50 w-24 border border-primary/20 shadow-xl">
-                          {['hi', 'te', 'ta'].map(lang => (
+                        <div className="absolute right-0 top-full hidden group-hover/menu:block pt-2 z-50">
+                          <div className="glass-panel py-1 w-24 border border-primary/20 shadow-xl relative before:absolute before:content-[''] before:w-full before:h-2 before:-top-2 before:left-0">
+                            {['hi', 'te', 'ta'].map(lang => (
                             <button
                               key={lang}
+                              disabled={translatingIdx !== null}
                               onClick={async () => {
-                                const res = await ragService.translate([msg.content], lang);
-                                if (res.translated_text) {
-                                  const newHistory = [...chatHistory];
-                                  newHistory[idx] = { 
-                                    ...msg, 
-                                    translation: res.translated_text[0], 
-                                    showOriginal: false,
-                                    translatedTo: lang 
-                                  };
-                                  useStore.setState({ chatHistory: newHistory });
+                                setTranslatingIdx(idx);
+                                try {
+                                  const res = await ragService.translate([msg.content], lang);
+                                  if (res.translated_text && res.translated_text[0]) {
+                                    const newHistory = [...chatHistory];
+                                    newHistory[idx] = { 
+                                      ...msg, 
+                                      translation: res.translated_text[0], 
+                                      showOriginal: false,
+                                      translatedTo: lang 
+                                    };
+                                    useStore.setState({ chatHistory: newHistory });
+                                  }
+                                } catch (err) {
+                                  console.error("Translation Error:", err);
+                                } finally {
+                                  setTranslatingIdx(null);
                                 }
                               }}
-                              className="w-full text-left px-3 py-1.5 text-[9px] font-bold hover:bg-primary/10 hover:text-primary transition-colors uppercase tracking-widest"
+                              className="w-full text-left px-3 py-1.5 text-[9px] font-bold hover:bg-primary/10 hover:text-primary transition-colors uppercase tracking-widest disabled:opacity-50"
                             >
-                              {{ hi: 'Hindi', te: 'Telugu', ta: 'Tamil' }[lang]}
+                              {translatingIdx === idx ? '...' : { hi: 'Hindi', te: 'Telugu', ta: 'Tamil' }[lang]}
                             </button>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}
