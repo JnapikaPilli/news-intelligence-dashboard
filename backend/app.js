@@ -3,7 +3,7 @@ const cors = require('cors');
 
 const newsRoutes = require('./routes/newsRoutes');
 const recommendationRoutes = require('./routes/recommendationRoutes');
-const ragRoutes = require('./routes/ragRoutes'); 
+const ragRoutes = require('./routes/ragRoutes');
 const newsController = require('./controllers/newsController'); // For the /api/search route
 
 const app = express();
@@ -18,7 +18,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
+// Jnapika
 // Health Check
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'ok', service: 'Node API Gateway' });
