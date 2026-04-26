@@ -9,9 +9,12 @@ import logging
 
 # Add root folder to sys path to import ml
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from ml.models import summarize_text, answer_question
+from ml.models import summarize_text, answer_question, generate_speech
 from services.vector_store import vector_store, VectorStore
 from services.pdf_extractor import extract_text_from_pdf, chunk_text
+
+class TTSRequest(BaseModel):
+    text: str
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +228,17 @@ async def global_exception_handler(request, exc):
         status_code=500,
         content={"success": False, "error": f"Internal Server Error: {str(exc)}"},
     )
+
+@app.post("/tts")
+async def text_to_speech_endpoint(request: TTSRequest):
+    try:
+        audio_base64 = generate_speech(request.text)
+        if not audio_base64:
+            raise HTTPException(status_code=500, detail="Failed to generate audio")
+        return {"audio": audio_base64}
+    except Exception as e:
+        logger.error(f"TTS Endpoint Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 def health_check():

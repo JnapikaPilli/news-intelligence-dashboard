@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Loader2, Sparkles, BookOpen, AlertCircle, FileDigit, BarChart } from 'lucide-react';
+import { Send, Bot, Loader2, Sparkles, BookOpen, AlertCircle, FileDigit, BarChart, Volume2 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { ragService } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,6 +10,46 @@ const EXAMPLE_QUERIES = [
   "Summarize the main arguments in 3 bullet points.",
   "Identify any major risk factors mentioned."
 ];
+
+function ListenButton({ text }) {
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  const handleListen = async () => {
+    if (!text || isGenerating) return;
+    setIsGenerating(true);
+    try {
+      const res = await ragService.generateTTS(text);
+      if (res.audio) {
+        const audio = new Audio(`data:audio/wav;base64,${res.audio}`);
+        audio.play();
+      }
+    } catch (err) {
+      console.error("TTS Error:", err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  return (
+    <button 
+      onClick={handleListen}
+      disabled={isGenerating}
+      className={clsx(
+        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm",
+        isGenerating 
+          ? "bg-primary/20 text-primary animate-pulse cursor-wait" 
+          : "bg-primary/10 text-primary hover:bg-primary hover:text-white border border-primary/20"
+      )}
+    >
+      {isGenerating ? (
+        <Loader2 size={12} className="animate-spin" />
+      ) : (
+        <Volume2 size={12} />
+      )}
+      {isGenerating ? "Generating Voice..." : "Listen"}
+    </button>
+  );
+}
 
 export default function ChatBox() {
   const { chatHistory, addChatMessage, currentDocumentId, isChatLoading, setIsChatLoading } = useStore();
@@ -156,8 +196,11 @@ export default function ChatBox() {
           >
             <div className="flex-1 w-full">
               {msg.role === 'bot' && (
-                <div className="flex items-center mb-3 text-xs font-bold uppercase tracking-wider text-primary">
-                  <Bot size={14} className="mr-1.5" /> AI Analysis
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center text-xs font-bold uppercase tracking-wider text-primary">
+                    <Bot size={14} className="mr-1.5" /> AI Analysis
+                  </div>
+                  {!msg.error && <ListenButton text={msg.content} />}
                 </div>
               )}
               

@@ -28,4 +28,6 @@ export const ragService = {
     }).then(res => res.data);
   },
   query: (query, documentId) => api.post('/rag/query', { query, documentId }).then(res => res.data),
+  generateTTS: (text) => api.post('/rag/tts', { text }).then(res => res.data),
+  summarize: (section) => api.post('/rag/summarize-section', { section }).then(res => res.data),
 };

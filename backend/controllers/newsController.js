@@ -1,73 +1,37 @@
 const axios = require('axios');
+const Parser = require('rss-parser');
+const parser = new Parser();
 
 const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://127.0.0.1:8000';
 
-const MOCK_NEWS = [
-    {
-        id: "1",
-        title: "Global Markets Rally Amid Positive Tech Earnings",
-        text: "Stock markets around the world saw significant gains today as major tech companies reported better-than-expected earnings for the third quarter. Apple, Microsoft, and Alphabet all beat analyst expectations, driven by strong cloud growth and hardware sales. European and Asian markets followed Wall Street's lead, pushing global indices to near-record highs. Analysts predict this bullish trend will continue into the holiday season, though inflation concerns remain a potential headwind for some sectors.",
-        source: "Financial Times",
-        category: "Business",
-        published_at: new Date().toISOString()
-    },
-    {
-        id: "2",
-        title: "Advancements in Quantum Computing Unveiled",
-        text: "Researchers from MIT and Google Quantum AI have hit a new milestone in qubit stability, maintaining coherence for over ten milliseconds. This breakthrough could lead to commercially viable quantum machines in the next 5 years, drastically reducing the timeline from previous estimates. Tech giants are heavily investing in this new hardware, hoping to solve complex cryptography, materials science, and climate modeling problems that are impossible for classical computers.",
-        source: "TechCrunch",
-        category: "Technology",
-        published_at: new Date(Date.now() - 86400000).toISOString()
-    },
-    {
-        id: "3",
-        title: "Local Team Wins Championship After 20 Years",
-        text: "In a stunning upset, the home team secured the league championship trophy last night, ending a two-decade championship drought. The final score was 3-2, decided by a dramatic penalty shootout after a grueling extra time. City-wide celebrations are expected throughout the weekend, and the mayor has declared Monday a public holiday. Fans gathered in the city center cheering and waving flags until the early hours of the morning.",
-        source: "Local Daily",
-        category: "Sports",
-        published_at: new Date(Date.now() - 172800000).toISOString()
-    }
-];
-
 exports.getNews = async (req, res, next) => {
     try {
-        // Prepare batch request for summarization
-        const articlesPayload = MOCK_NEWS.map(n => ({ id: n.id, text: n.text }));
+        // Fetch Real-Time News from BBC RSS
+        const feed = await parser.parseURL('https://feeds.bbci.co.uk/news/rss.xml');
         
-        let summariesMap = {};
-        
-        try {
-            console.log("Sending articles:", articlesPayload);
-
-            const response = await axios.post(`${RAG_SERVICE_URL}/summarize-articles`, {
-                articles: articlesPayload
-            }, { timeout: 30000 }); // Increased timeout for batch processing
-            
-            console.log("Received from Python:", response.data);
-            console.log("Summaries:", response.data?.summaries);
-            
-            if (response.data && response.data.summaries) {
-                response.data.summaries.forEach(s => {
-                    summariesMap[s.id] = s.bullet_summary;
-                });
-            }
-        } catch (ragError) {
-            console.error("RAG ERROR:", ragError);
-        }
-
-        // Map summaries back to articles
-        const responseData = MOCK_NEWS.map(article => ({
-            id: article.id,
-            title: article.title,
-            bullet_summary: summariesMap[article.id] || ["Summary not available"],
-            source: article.source,
-            category: article.category,
-            published_at: article.published_at
+        const articles = feed.items.slice(0, 10).map(item => ({
+            id: item.guid || Math.random().toString(36).substr(2, 9),
+            title: item.title,
+            text: item.contentSnippet || item.content || item.title,
+            source: "BBC News",
+            category: "World",
+            url: item.link,
+            published_at: item.pubDate,
+            bullet_summary: ["Summary not available"] // Will be generated on-demand by the UI
         }));
 
-        res.status(200).json(responseData);
+        res.status(200).json(articles);
     } catch (error) {
-        next(error);
+        console.error("RSS Fetch Error:", error.message);
+        // Fallback to a single item if RSS fails
+        res.status(200).json([{
+            id: "fallback",
+            title: "Global Intelligence Update",
+            text: "Real-time feed is currently refreshing. Please check back in a moment.",
+            source: "System",
+            category: "General",
+            published_at: new Date().toISOString()
+        }]);
     }
 };
 

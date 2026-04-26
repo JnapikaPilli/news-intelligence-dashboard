@@ -17,6 +17,10 @@ _tokenizer = None
 _classifier = None
 _ocr_processor = None
 _ocr_model = None
+_tts_model = None
+_tts_processor = None
+_tts_vocoder = None
+_speaker_embeddings = None
 
 def get_summarizer():
     global _model, _tokenizer
@@ -42,6 +46,31 @@ def get_ocr_model():
             torch_dtype=torch.float16 if device == "cuda" else torch.float32
         ).to(device)
     return _ocr_model, _ocr_processor
+
+def get_tts_model():
+    """Lightweight TTS fallback for Windows stability."""
+    return None, None, None, None
+
+def generate_speech(text: str) -> str:
+    """Converts text to speech using gTTS for maximum stability on Windows."""
+    from gtts import gTTS
+    import io
+    import base64
+    
+    try:
+        # Create TTS object
+        tts = gTTS(text=text[:600], lang='en')
+        
+        # Save to memory
+        buffer = io.BytesIO()
+        tts.write_to_fp(buffer)
+        buffer.seek(0)
+        
+        # Encode as base64
+        return base64.b64encode(buffer.read()).decode('utf-8')
+    except Exception as e:
+        logger.error(f"TTS Error: {str(e)}")
+        return ""
 
 def get_classifier():
     global _classifier
@@ -172,6 +201,15 @@ def summarize_text(text: str, max_length: int = 400, min_length: int = 150) -> l
             if not s.endswith(('.', '!', '?')): s += "."
             bullets.append(s)
             
+    # Fallback: If AI fails to generate meaningful bullets, extract first 3 sentences
+    if not bullets:
+        fallback_sentences = re.split(r'(?<=[.!?])\s+', text[:1000])
+        for s in fallback_sentences[:3]:
+            s = re.sub(r'[^a-zA-Z0-9\s\.,!\?\'\"-]', '', s).strip()
+            if len(s) > 10:
+                if not s.endswith(('.', '!', '?')): s += "."
+                bullets.append(s)
+
     return bullets[:8]
 
 def classify_text(text: str, candidate_labels: list) -> str:

@@ -107,3 +107,25 @@ exports.summarizeSection = async (req, res) => {
         });
     }
 };
+
+exports.generateTTS = async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text) {
+            return res.status(400).json({ success: false, error: "Text is required for TTS." });
+        }
+
+        const response = await axios.post(`${RAG_SERVICE_URL}/tts`, { text });
+        return res.status(200).json({
+            success: true,
+            audio: response.data.audio
+        });
+
+    } catch (error) {
+        console.error("TTS Gateway Error:", error.message);
+        return res.status(500).json({ 
+            success: false, 
+            error: error.response?.data?.detail || "An error occurred while generating speech." 
+        });
+    }
+};
