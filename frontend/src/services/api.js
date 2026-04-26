@@ -10,6 +10,7 @@ export const newsService = {
   getNews: () => api.get('/news').then(res => res.data),
   getTrending: () => api.get('/news/trending').then(res => res.data),
   getByCategory: (category) => api.get(`/news/category/${category}`).then(res => res.data),
+  search: (query) => api.post('/search', { query }).then(res => res.data),
 };
 
 export const ragService = {

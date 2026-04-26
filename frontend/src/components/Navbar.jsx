@@ -1,10 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Search, Bell, Menu, Moon, Sun } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import LanguageSelector from './LanguageSelector';
+import { useNavigate } from 'react-router-dom';
 
 export default function Navbar() {
-  const { theme, toggleTheme } = useStore();
+  const { theme, toggleTheme, setSearchQuery } = useStore();
+  const [localQuery, setLocalQuery] = useState('');
+  const navigate = useNavigate();
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (localQuery.trim()) {
+      setSearchQuery(localQuery.trim());
+      navigate('/search');
+    }
+  };
 
   return (
     <header className="h-20 glass-panel mx-4 mt-4 px-6 flex items-center justify-between relative z-20">
@@ -13,14 +24,16 @@ export default function Navbar() {
           <Menu size={24} />
         </button>
         
-        <div className="hidden md:flex items-center glass-card px-4 py-2 rounded-full border border-border/50 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all w-80">
+        <form onSubmit={handleSearch} className="hidden md:flex items-center glass-card px-4 py-2 rounded-full border border-border/50 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all w-80">
           <Search size={18} className="text-foreground/50 mr-3" />
           <input 
             type="text" 
+            value={localQuery}
+            onChange={(e) => setLocalQuery(e.target.value)}
             placeholder="Search news, topics, companies..." 
             className="bg-transparent border-none outline-none text-sm w-full placeholder:text-foreground/40 text-foreground"
           />
-        </div>
+        </form>
       </div>
 
       <div className="flex items-center gap-4">

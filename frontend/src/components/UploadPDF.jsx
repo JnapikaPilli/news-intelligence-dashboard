@@ -23,7 +23,8 @@ export default function UploadPDF() {
         if (setChatHistory) setChatHistory([]); // Clear chat history on new document
       } catch (err) {
         console.error("Upload failed", err);
-        alert("Upload failed. Please check the backend connection.");
+        const errorMessage = err.response?.data?.error || "Upload failed. Please check your internet connection and try again.";
+        alert(errorMessage);
       } finally {
         setIsUploading(false);
         setTimeout(() => setUploadProgress(0), 1000);

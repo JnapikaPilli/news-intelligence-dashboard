@@ -5,6 +5,7 @@ import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
 import Dashboard from "./pages/Dashboard";
 import DocumentQA from "./pages/DocumentQA";
+import SearchResults from "./pages/SearchResults";
 
 export default function App() {
   const { initTheme } = useStore();
@@ -23,6 +24,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/qa" element={<DocumentQA />} />
+              <Route path="/search" element={<SearchResults />} />
             </Routes>
           </main>
         </div>

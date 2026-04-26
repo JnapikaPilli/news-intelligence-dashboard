@@ -38,4 +38,12 @@ export const useStore = create((set) => ({
   setCurrentDocumentId: (id) => set({ currentDocumentId: id }),
   isChatLoading: false,
   setIsChatLoading: (loading) => set({ isChatLoading: loading }),
+
+  // Search state
+  searchResults: null,
+  isSearching: false,
+  searchQuery: '',
+  setSearchResults: (results) => set({ searchResults: results }),
+  setIsSearching: (isSearching) => set({ isSearching }),
+  setSearchQuery: (searchQuery) => set({ searchQuery }),
 }));

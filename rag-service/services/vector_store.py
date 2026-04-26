@@ -3,12 +3,34 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
+import torch
+
 logger = logging.getLogger(__name__)
 
 class VectorStore:
-    def __init__(self, model_name="all-MiniLM-L6-v2"):
-        self.model = SentenceTransformer(model_name)
-        self.dimension = self.model.get_sentence_embedding_dimension()
+    def __init__(self, model_name="BAAI/bge-small-en-v1.5", model=None):
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if model:
+            self.model = model
+        else:
+            logger.info(f"Loading High-Accuracy Embeddings ({model_name}) on {device}...")
+            self.model = SentenceTransformer(model_name, device=device)
+        
+        # BGE models work best with this prefix for queries
+        self.query_instruction = "Represent this sentence for searching relevant passages: "
+        
+        # Rename fix for newer sentence-transformers
+        if hasattr(self.model, "get_embedding_dimension"):
+            self.dimension = self.model.get_embedding_dimension()
+        else:
+            self.dimension = self.model.get_sentence_embedding_dimension()
+            
+        self.index = faiss.IndexFlatL2(self.dimension)
+        self.chunks = []
+        self.metadata = []
+
+    def clear(self):
+        """Resets the vector store index and chunks."""
         self.index = faiss.IndexFlatL2(self.dimension)
         self.chunks = []
         self.metadata = []
@@ -25,11 +47,13 @@ class VectorStore:
             self.metadata.extend([{} for _ in texts])
 
     def search(self, query: str, k: int = 3):
-        """Returns top k chunks matching the query."""
+        """Returns top k chunks matching the query with BGE instruction."""
         if self.index.ntotal == 0:
             return []
         
-        query_vector = self.model.encode([query], convert_to_numpy=True)
+        # Add instruction prefix for BGE
+        full_query = self.query_instruction + query
+        query_vector = self.model.encode([full_query], convert_to_numpy=True)
         distances, indices = self.index.search(query_vector, k)
         
         results = []

@@ -12,7 +12,7 @@ const axios = require('axios');
 
 // Middleware
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174'], // Allowed frontend ports
+    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'], // Allowed frontend ports
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -28,7 +28,7 @@ app.get('/api/health', (req, res) => {
 app.get('/api/test-rag', async (req, res) => {
     try {
         console.log("Before request to FastAPI /test");
-        const response = await axios.get('http://localhost:8000/test');
+        const response = await axios.get('http://127.0.0.1:8000/test');
         console.log("After response from FastAPI:", response.data);
         res.status(200).json(response.data);
     } catch (error) {

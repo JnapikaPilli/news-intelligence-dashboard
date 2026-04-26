@@ -2,7 +2,7 @@ const axios = require('axios');
 const fs = require('fs');
 const FormData = require('form-data');
 
-const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://localhost:8000';
+const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://127.0.0.1:8000';
 
 exports.uploadFile = async (req, res) => {
     try {
@@ -18,7 +18,8 @@ exports.uploadFile = async (req, res) => {
         console.log(`Forwarding file ${req.file.originalname} to FastAPI at ${RAG_SERVICE_URL}/upload`);
 
         const response = await axios.post(`${RAG_SERVICE_URL}/upload`, form, {
-            headers: form.getHeaders()
+            headers: form.getHeaders(),
+            timeout: 300000 // 5 minutes for heavy AI Vision (Donut) processing on large PDFs
         });
         
         console.log("Response from FastAPI:", response.data);
@@ -44,10 +45,13 @@ exports.uploadFile = async (req, res) => {
             console.warn("Could not delete temp file in catch:", cleanupErr.message);
         }
         
-        console.error("RAG Upload Error:", error.response?.data || error.message);
-        return res.status(500).json({ 
+        const status = error.response?.status || 500;
+        const detail = error.response?.data?.detail || error.message || "An error occurred while uploading to the RAG service.";
+        
+        console.error(`RAG Upload Error [${status}]:`, detail);
+        return res.status(status).json({ 
             success: false, 
-            error: error.response?.data?.detail || "An error occurred while uploading to the RAG service." 
+            error: detail
         });
     }
 };
