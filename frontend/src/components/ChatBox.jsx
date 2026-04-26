@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Loader2, Sparkles, BookOpen, AlertCircle, FileDigit, BarChart, Volume2 } from 'lucide-react';
+import { Send, Bot, Loader2, Sparkles, BookOpen, AlertCircle, FileDigit, BarChart, Volume2, Globe, RefreshCcw } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { ragService } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -52,7 +52,7 @@ function ListenButton({ text }) {
 }
 
 export default function ChatBox() {
-  const { chatHistory, addChatMessage, currentDocumentId, isChatLoading, setIsChatLoading } = useStore();
+  const { chatHistory, addChatMessage, currentDocumentId, isChatLoading, setIsChatLoading, language } = useStore();
   const [input, setInput] = useState('');
   const endOfMessagesRef = useRef(null);
 
@@ -71,7 +71,7 @@ export default function ChatBox() {
     setIsChatLoading(true);
 
     try {
-      const res = await ragService.query(userMessage.content, currentDocumentId);
+      const res = await ragService.query(userMessage.content, currentDocumentId, language);
       
       let answerContent = res.answer;
       if (Array.isArray(res.answer)) {
@@ -200,7 +200,55 @@ export default function ChatBox() {
                   <div className="flex items-center text-xs font-bold uppercase tracking-wider text-primary">
                     <Bot size={14} className="mr-1.5" /> AI Analysis
                   </div>
-                  {!msg.error && <ListenButton text={msg.content} />}
+                  <div className="flex items-center gap-2">
+                    {msg.translation && (
+                      <button 
+                        onClick={() => {
+                          const newHistory = [...chatHistory];
+                          newHistory[idx] = { ...msg, showOriginal: !msg.showOriginal };
+                          useStore.setState({ chatHistory: newHistory });
+                        }}
+                        className="flex items-center gap-1.5 text-primary hover:underline transition-all text-[10px] font-bold"
+                      >
+                        <RefreshCcw size={10} /> {msg.showOriginal ? 'Show Translated' : 'Show Original'}
+                      </button>
+                    )}
+                    
+                    {!msg.error && (
+                      <div className="relative group/menu">
+                        <button 
+                          className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-md text-[10px] font-bold transition-all border border-primary/20"
+                        >
+                          <Globe size={10} /> Translate
+                        </button>
+                        
+                        <div className="absolute right-0 top-full mt-1 hidden group-hover/menu:block glass-panel py-1 z-50 w-24 border border-primary/20 shadow-xl">
+                          {['hi', 'te', 'ta'].map(lang => (
+                            <button
+                              key={lang}
+                              onClick={async () => {
+                                const res = await ragService.translate([msg.content], lang);
+                                if (res.translated_text) {
+                                  const newHistory = [...chatHistory];
+                                  newHistory[idx] = { 
+                                    ...msg, 
+                                    translation: res.translated_text[0], 
+                                    showOriginal: false,
+                                    translatedTo: lang 
+                                  };
+                                  useStore.setState({ chatHistory: newHistory });
+                                }
+                              }}
+                              className="w-full text-left px-3 py-1.5 text-[9px] font-bold hover:bg-primary/10 hover:text-primary transition-colors uppercase tracking-widest"
+                            >
+                              {{ hi: 'Hindi', te: 'Telugu', ta: 'Tamil' }[lang]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {!msg.error && <ListenButton text={(!msg.showOriginal && msg.translation) ? msg.translation : msg.content} />}
+                  </div>
                 </div>
               )}
               
@@ -208,7 +256,7 @@ export default function ChatBox() {
                 "whitespace-pre-wrap text-sm leading-relaxed",
                 msg.role === 'bot' ? "text-foreground/90" : "text-white/90 font-medium"
               )}>
-                {msg.content}
+                {(!msg.showOriginal && msg.translation) ? msg.translation : msg.content}
               </div>
               
               {msg.sources && msg.sources.length > 0 && (

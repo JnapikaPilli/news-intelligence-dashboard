@@ -1,6 +1,11 @@
 import logging
 import faiss
 import numpy as np
+import os
+
+os.environ["HF_HUB_OFFLINE"] = "0"
+os.environ["TRANSFORMERS_OFFLINE"] = "0"
+
 from transformers import AutoTokenizer, AutoModel
 import torch
 

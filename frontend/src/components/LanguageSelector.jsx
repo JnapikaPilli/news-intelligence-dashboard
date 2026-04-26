@@ -20,16 +20,22 @@ export default function LanguageSelector() {
           English (EN)
         </button>
         <button 
-          onClick={() => setLanguage('es')}
-          className="w-full text-left px-4 py-2 text-sm hover:bg-foreground/5 hover:text-primary transition-colors"
+          onClick={() => setLanguage('hi')}
+          className="w-full text-left px-4 py-2 text-sm hover:bg-foreground/5 hover:text-primary transition-colors font-medium"
         >
-          Spanish (ES)
+          Hindi (हिन्दी)
         </button>
         <button 
-          onClick={() => setLanguage('fr')}
-          className="w-full text-left px-4 py-2 text-sm hover:bg-foreground/5 hover:text-primary transition-colors"
+          onClick={() => setLanguage('ta')}
+          className="w-full text-left px-4 py-2 text-sm hover:bg-foreground/5 hover:text-primary transition-colors font-medium"
         >
-          French (FR)
+          Tamil (தமிழ்)
+        </button>
+        <button 
+          onClick={() => setLanguage('te')}
+          className="w-full text-left px-4 py-2 text-sm hover:bg-foreground/5 hover:text-primary transition-colors font-medium"
+        >
+          Telugu (తెలుగు)
         </button>
       </div>
     </div>

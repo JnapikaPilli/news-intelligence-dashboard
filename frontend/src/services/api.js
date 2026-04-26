@@ -10,7 +10,7 @@ export const newsService = {
   getNews: () => api.get('/news').then(res => res.data),
   getTrending: () => api.get('/news/trending').then(res => res.data),
   getByCategory: (category) => api.get(`/news/category/${category}`).then(res => res.data),
-  search: (query) => api.post('/search', { query }).then(res => res.data),
+  search: (query, language = 'en') => api.post('/search', { query, language }).then(res => res.data),
 };
 
 export const ragService = {
@@ -27,7 +27,8 @@ export const ragService = {
       }
     }).then(res => res.data);
   },
-  query: (query, documentId) => api.post('/rag/query', { query, documentId }).then(res => res.data),
+  query: (query, documentId, language = 'en') => api.post('/rag/query', { query, documentId, language }).then(res => res.data),
   generateTTS: (text) => api.post('/rag/tts', { text }).then(res => res.data),
-  summarize: (section) => api.post('/rag/summarize-section', { section }).then(res => res.data),
+  summarize: (section, language = 'en') => api.post('/rag/summarize-section', { section, language }).then(res => res.data),
+  translate: (text, target_language) => api.post('/rag/translate', { text, target_language }).then(res => res.data),
 };

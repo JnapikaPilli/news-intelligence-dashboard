@@ -1,7 +1,9 @@
+import os
+os.environ["HF_HUB_OFFLINE"] = "0"
+os.environ["TRANSFORMERS_OFFLINE"] = "0"
+
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
 import logging
-import os
-
 import torch
 
 logging.basicConfig(level=logging.INFO)
@@ -10,6 +12,17 @@ logger = logging.getLogger(__name__)
 # Determine best device (NVIDIA GPU if available)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 logger.info(f"AI Engine using device: {device}")
+
+# Warm-up Logic
+
+def warm_up():
+    """Pre-loads core models into GPU to eliminate first-request lag."""
+    try:
+        logger.info("🔥 Warming up GPU engines...")
+        get_summarizer()
+        logger.info("✅ GPU Warm-up complete. System is ready.")
+    except Exception as e:
+        logger.error(f"Warm-up failed: {str(e)}")
 
 # Lazy loading models
 _model = None
@@ -21,6 +34,61 @@ _tts_model = None
 _tts_processor = None
 _tts_vocoder = None
 _speaker_embeddings = None
+_translation_models = {}
+
+def get_translation_model(target_lang: str):
+    """Lazy loads translation models (English to Hindi/Tamil/Telugu)."""
+    global _translation_models
+    if target_lang == "en": return None, None
+    
+    model_key = f"en-{target_lang}"
+    if model_key not in _translation_models:
+        from transformers import MarianMTModel, MarianTokenizer
+        import torch
+        
+        # Specialized handling for Dravidian languages (Tamil/Telugu)
+        if target_lang in ["ta", "te"]:
+            model_name = "Helsinki-NLP/opus-mt-en-dra"
+        else:
+            model_name = f"Helsinki-NLP/opus-mt-en-{target_lang}"
+            
+        logger.info(f"Loading Translation Model ({model_name}) on {device}...")
+        tokenizer = MarianTokenizer.from_pretrained(model_name)
+        
+        # Optimize with float16 for 2x speed and 50% less VRAM
+        model_kwargs = {"torch_dtype": torch.float16} if "cuda" in str(device) else {}
+        model = MarianMTModel.from_pretrained(model_name, **model_kwargs).to(device)
+        _translation_models[model_key] = (model, tokenizer)
+        
+    return _translation_models[model_key]
+
+def translate_text(text: str, target_lang: str) -> str:
+    """Translates text from English to target language with logging."""
+    if not text or target_lang == "en": return text
+    
+    try:
+        model, tokenizer = get_translation_model(target_lang)
+        if not model: return text
+        
+        # Add language tokens for multi-language models (like Dravidian)
+        clean_text = str(text)
+        if target_lang == "te":
+            clean_text = f">>tel<< {clean_text}"
+        elif target_lang == "ta":
+            clean_text = f">>tam<< {clean_text}"
+            
+        # Log the attempt for verification
+        logger.info(f"Translating to {target_lang}: {clean_text[:50]}...")
+        
+        inputs = tokenizer(clean_text, return_tensors="pt", padding=True, truncation=True).to(device)
+        translated = model.generate(**inputs, max_new_tokens=512)
+        result = tokenizer.decode(translated[0], skip_special_tokens=True)
+        
+        logger.info(f"Translated Result: {result[:50]}...")
+        return result
+    except Exception as e:
+        logger.error(f"Translation Error ({target_lang}): {str(e)}")
+        return text
 
 def get_summarizer():
     global _model, _tokenizer

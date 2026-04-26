@@ -58,13 +58,17 @@ exports.uploadFile = async (req, res) => {
 
 exports.queryContent = async (req, res) => {
     try {
-        const { query, documentId } = req.body;
+        const { query, documentId, language } = req.body;
         
         if (!query) {
             return res.status(400).json({ success: false, error: "Query is required." });
         }
 
-        const response = await axios.post(`${RAG_SERVICE_URL}/query`, { query, documentId });
+        const response = await axios.post(`${RAG_SERVICE_URL}/query`, { 
+            query, 
+            documentId, 
+            language: language || 'en' 
+        });
         
         // Prepare clean response
         return res.status(200).json({
@@ -72,7 +76,8 @@ exports.queryContent = async (req, res) => {
             answer: response.data.answer,
             source_titles: response.data.source_titles || [],
             source_chunks: response.data.source_chunks || [],
-            page_numbers: response.data.page_numbers || []
+            page_numbers: response.data.page_numbers || [],
+            language: response.data.language
         });
 
     } catch (error) {
@@ -86,17 +91,26 @@ exports.queryContent = async (req, res) => {
 
 exports.summarizeSection = async (req, res) => {
     try {
-        const { section, documentId } = req.body;
+        const { section, documentId, language } = req.body;
         
         if (!section) {
             return res.status(400).json({ success: false, error: "Section text is required." });
         }
 
-        const response = await axios.post(`${RAG_SERVICE_URL}/summarize-section`, { section, documentId });
+        // Route to the correct AI pipeline
+        const endpoint = documentId ? 'summarize-section' : 'summarize-text';
+        console.log(`Routing summarization to: ${endpoint}`);
+
+        const response = await axios.post(`${RAG_SERVICE_URL}/${endpoint}`, { 
+            section, 
+            documentId, 
+            language: language || 'en' 
+        });
         
         return res.status(200).json({
             success: true,
-            summary: response.data.summary
+            summary: response.data.summary,
+            language: response.data.language
         });
 
     } catch (error) {
@@ -126,6 +140,33 @@ exports.generateTTS = async (req, res) => {
         return res.status(500).json({ 
             success: false, 
             error: error.response?.data?.detail || "An error occurred while generating speech." 
+        });
+    }
+};
+
+exports.translateText = async (req, res) => {
+    try {
+        const { text, target_language } = req.body;
+        
+        if (!text || !target_language) {
+            return res.status(400).json({ success: false, error: "Text and target_language are required." });
+        }
+
+        const response = await axios.post(`${RAG_SERVICE_URL}/translate`, { 
+            text: Array.isArray(text) ? text : [text],
+            target_language 
+        });
+        
+        return res.status(200).json({
+            success: true,
+            translated_text: response.data.translated_text
+        });
+
+    } catch (error) {
+        console.error("Translate Gateway Error:", error.message);
+        return res.status(500).json({ 
+            success: false, 
+            error: error.response?.data?.detail || "An error occurred while translating." 
         });
     }
 };

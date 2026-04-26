@@ -4,30 +4,74 @@ const parser = new Parser();
 
 const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL || 'http://127.0.0.1:8000';
 
+// Smart Cache to prevent lag and variety fatigue
+let newsCache = [];
+let lastFetchTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 Minutes
+
+const FEEDS = [
+    { url: 'https://feeds.bbci.co.uk/news/rss.xml', source: 'BBC News', category: 'World' },
+    { url: 'https://techcrunch.com/feed/', source: 'TechCrunch', category: 'Technology' },
+    { url: 'https://www.reutersagency.com/feed/?best-topics=top-news&post_type=best', source: 'Reuters', category: 'Business' },
+    { url: 'https://www.aljazeera.com/xml/rss/all.xml', source: 'Al Jazeera', category: 'World' },
+    { url: 'https://www.theverge.com/rss/index.xml', source: 'The Verge', category: 'Technology' }
+];
+
 exports.getNews = async (req, res, next) => {
     try {
-        // Fetch Real-Time News from BBC RSS
-        const feed = await parser.parseURL('https://feeds.bbci.co.uk/news/rss.xml');
+        const now = Date.now();
         
-        const articles = feed.items.slice(0, 10).map(item => ({
-            id: item.guid || Math.random().toString(36).substr(2, 9),
-            title: item.title,
-            text: item.contentSnippet || item.content || item.title,
-            source: "BBC News",
-            category: "World",
-            url: item.link,
-            published_at: item.pubDate,
-            bullet_summary: ["Summary not available"] // Will be generated on-demand by the UI
+        // Return from cache if it's fresh (under 5 mins)
+        if (newsCache.length > 0 && (now - lastFetchTime) < CACHE_DURATION) {
+            // Even from cache, we shuffle a bit to keep it fresh
+            return res.status(200).json([...newsCache].sort(() => Math.random() - 0.5));
+        }
+
+        console.log("Fetching global intelligence from 5+ sources...");
+        const feedPromises = FEEDS.map(f => parser.parseURL(f.url).catch(e => {
+            console.error(`Feed Error (${f.source}):`, e.message);
+            return { items: [] };
         }));
 
-        res.status(200).json(articles);
+        const results = await Promise.all(feedPromises);
+        let allArticles = [];
+        const seenTitles = new Set();
+
+        results.forEach((feed, index) => {
+            const sourceInfo = FEEDS[index];
+            feed.items.slice(0, 10).forEach(item => {
+                const title = item.title?.trim();
+                // Deduplicate by title
+                if (title && !seenTitles.has(title.toLowerCase())) {
+                    seenTitles.add(title.toLowerCase());
+                    allArticles.push({
+                        id: item.guid || Math.random().toString(36).substr(2, 9),
+                        title: title,
+                        text: item.contentSnippet || item.content || item.title,
+                        source: sourceInfo.source,
+                        category: sourceInfo.category,
+                        url: item.link,
+                        published_at: item.pubDate,
+                        bullet_summary: ["Summary not available"]
+                    });
+                }
+            });
+        });
+
+        // Shuffle and limit to top 20
+        allArticles = allArticles.sort(() => Math.random() - 0.5).slice(0, 20);
+
+        // Update Cache
+        newsCache = allArticles;
+        lastFetchTime = now;
+
+        res.status(200).json(allArticles);
     } catch (error) {
-        console.error("RSS Fetch Error:", error.message);
-        // Fallback to a single item if RSS fails
-        res.status(200).json([{
+        console.error("News Aggregator Error:", error.message);
+        res.status(200).json(newsCache.length > 0 ? newsCache : [{
             id: "fallback",
-            title: "Global Intelligence Update",
-            text: "Real-time feed is currently refreshing. Please check back in a moment.",
+            title: "Intelligence Feed Refreshing",
+            text: "The real-time feed is currently updating. Please wait a moment.",
             source: "System",
             category: "General",
             published_at: new Date().toISOString()
@@ -136,9 +180,11 @@ exports.searchNews = async (req, res, next) => {
         
         if (rawArticles.length > 0) {
             try {
+                const { language } = req.body;
                 const ragResponse = await axios.post(`${RAG_SERVICE_URL}/search-rag`, {
                     query: query,
-                    articles: rawArticles.map(a => ({ id: a.id, text: `${a.title}. ${a.content || a.description}` }))
+                    articles: rawArticles.map(a => ({ id: a.id, text: `${a.title}. ${a.content || a.description}` })),
+                    language: language || 'en'
                 }, { timeout: 60000 });
                 
                 if (ragResponse.data) {

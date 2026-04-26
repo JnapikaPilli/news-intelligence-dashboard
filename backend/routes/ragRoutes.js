@@ -8,5 +8,6 @@ router.post('/upload', upload.single('file'), ragController.uploadFile);
 router.post('/query', ragController.queryContent);
 router.post('/summarize-section', ragController.summarizeSection);
 router.post('/tts', ragController.generateTTS);
+router.post('/translate', ragController.translateText);
 
 module.exports = router;

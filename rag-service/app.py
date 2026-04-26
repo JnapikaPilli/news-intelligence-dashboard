@@ -9,7 +9,7 @@ import logging
 
 # Add root folder to sys path to import ml
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from ml.models import summarize_text, answer_question, generate_speech
+from ml.models import summarize_text, answer_question, generate_speech, translate_text, warm_up
 from services.vector_store import vector_store, VectorStore
 from services.pdf_extractor import extract_text_from_pdf, chunk_text
 
@@ -19,6 +19,11 @@ class TTSRequest(BaseModel):
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="RAG Service MVP")
+
+@app.on_event("startup")
+async def startup_event():
+    # Warm up models on startup to avoid first-request lag
+    warm_up()
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,10 +36,12 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     query: str
     documentId: Optional[str] = None
+    language: str = "en"
 
 class SummarizeRequest(BaseModel):
     section: str
     documentId: Optional[str] = None
+    language: str = "en"
 
 class ArticleItem(BaseModel):
     id: str
@@ -43,9 +50,26 @@ class ArticleItem(BaseModel):
 class SearchRAGRequest(BaseModel):
     query: str
     articles: List[ArticleItem]
+    language: str = "en"
 
 class BatchSummarizeRequest(BaseModel):
     articles: List[ArticleItem]
+    language: str = "en"
+
+class TranslateRequest(BaseModel):
+    text: List[str]
+    target_language: str
+
+@app.post("/translate")
+async def translate_endpoint(request: TranslateRequest):
+    try:
+        translated_texts = []
+        for s in request.text:
+            translated_texts.append(translate_text(s, request.target_language))
+        return {"translated_text": translated_texts}
+    except Exception as e:
+        logger.error(f"Batch Translation Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/summarize-articles")
 async def summarize_articles(request: BatchSummarizeRequest):
@@ -53,6 +77,11 @@ async def summarize_articles(request: BatchSummarizeRequest):
     for article in request.articles:
         try:
             bullet_points = summarize_text(article.text)
+            
+            # Translate each bullet point if needed
+            if request.language != "en":
+                bullet_points = [translate_text(b, request.language) for b in bullet_points]
+                
             if not bullet_points:
                 bullet_points = ["Summary not available"]
             summaries.append({
@@ -76,11 +105,11 @@ async def search_rag(request: SearchRAGRequest):
     3. Returns a combined summary and the IDs of top articles
     """
     try:
-        print(f"--- Processing Search RAG: {request.query} ---")
+        print(f"--- Processing Search RAG: {request.query} ({request.language}) ---")
         
         if not request.articles:
             print("WARNING: No articles provided for search RAG")
-            return {"summary": ["No articles provided for analysis."], "top_ids": []}
+            return {"summary": ["No articles provided for analysis."], "top_ids": [], "language": request.language}
         
         # Create temporary store sharing the model
         print("DEBUG: Creating temp_store with shared model...")
@@ -98,11 +127,15 @@ async def search_rag(request: SearchRAGRequest):
         
         if not results:
             print("WARNING: No results from temp_store.search")
-            return {"summary": ["No relevant insights found in articles."], "top_ids": []}
+            return {"summary": ["No relevant insights found in articles."], "top_ids": [], "language": request.language}
             
         context_text = " ".join([r['chunk'] for r in results])
         print(f"DEBUG: Summarizing {len(context_text)} chars of context...")
         bullet_points = summarize_text(context_text, max_length=200, min_length=60)
+        
+        # Translation Step
+        if request.language != "en":
+            bullet_points = [translate_text(b, request.language) for b in bullet_points]
         
         # Collect unique article IDs that were most relevant
         top_ids = list(dict.fromkeys([r['metadata']['id'] for r in results]))
@@ -110,7 +143,8 @@ async def search_rag(request: SearchRAGRequest):
         
         return {
             "summary": bullet_points,
-            "top_ids": top_ids[:5] # Return top 5 unique articles
+            "top_ids": top_ids[:5], # Return top 5 unique articles
+            "language": request.language
         }
     except Exception as e:
         import traceback
@@ -184,6 +218,10 @@ async def query_document(request: QueryRequest):
     # Use dedicated QA logic instead of generic summarization
     answer_bullets = answer_question(request.query, context_text)
     
+    # Translation Step
+    if request.language != "en":
+        answer_bullets = [translate_text(b, request.language) for b in answer_bullets]
+    
     source_chunks = [r['chunk'] for r in results]
     sources = [r['metadata'].get('source', 'Unknown') for r in results]
     page_numbers = [r['metadata'].get('page', 1) for r in results]
@@ -192,12 +230,28 @@ async def query_document(request: QueryRequest):
         "answer": answer_bullets,
         "source_chunks": source_chunks,
         "page_numbers": page_numbers,
-        "source_titles": list(set(sources))
+        "source_titles": list(set(sources)),
+        "language": request.language
     }
+
+@app.post("/summarize-text")
+async def summarize_text_direct(request: SummarizeRequest):
+    try:
+        # Directly summarize the provided text (for news)
+        bullet_points = summarize_text(request.section)
+        
+        # Translation Step
+        if request.language != "en":
+            bullet_points = [translate_text(b, request.language) for b in bullet_points]
+            
+        return {"summary": bullet_points, "language": request.language}
+    except Exception as e:
+        logger.error(f"Summarize Text Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/summarize-section")
 async def summarize_section(request: SummarizeRequest):
-    # Retrieve relevant texts for the specified section
+    # Retrieve relevant texts for the specified section (for RAG)
     results = vector_store.search(request.section, k=5)
     if not results:
          raise HTTPException(status_code=404, detail="Section not found in documents.")
@@ -205,7 +259,11 @@ async def summarize_section(request: SummarizeRequest):
     context_text = " ".join([r['chunk'] for r in results])
     bullet_points = summarize_text(context_text, max_length=100, min_length=30)
     
-    return {"summary": bullet_points}
+    # Translation Step
+    if request.language != "en":
+        bullet_points = [translate_text(b, request.language) for b in bullet_points]
+        
+    return {"summary": bullet_points, "language": request.language}
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
