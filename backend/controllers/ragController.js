@@ -105,7 +105,7 @@ exports.summarizeSection = async (req, res) => {
             section, 
             documentId, 
             language: language || 'en' 
-        });
+        }, { timeout: 60000 }); // Increased timeout for the Large model
         
         return res.status(200).json({
             success: true,

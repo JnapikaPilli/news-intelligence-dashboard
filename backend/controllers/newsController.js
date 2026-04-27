@@ -17,6 +17,25 @@ const FEEDS = [
     { url: 'https://www.theverge.com/rss/index.xml', source: 'The Verge', category: 'Technology' }
 ];
 
+const MOCK_NEWS = [
+    {
+        id: "1",
+        title: "AI Breakthrough: New Model Surpasses Human Performance",
+        text: "Researchers have announced a new AI model that consistently outperforms humans on complex reasoning tasks.",
+        source: "Tech Insights",
+        category: "Technology",
+        published_at: new Date().toISOString()
+    },
+    {
+        id: "2",
+        title: "Global Markets Rally Amid Economic Recovery Hopes",
+        text: "Stock markets across the globe saw significant gains today as investors grew optimistic about a steady economic recovery.",
+        source: "Market Watch",
+        category: "Business",
+        published_at: new Date().toISOString()
+    }
+];
+
 exports.getNews = async (req, res, next) => {
     try {
         const now = Date.now();
