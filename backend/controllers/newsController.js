@@ -224,9 +224,12 @@ exports.searchNews = async (req, res, next) => {
                 const ytResponse = await axios.get('https://www.googleapis.com/youtube/v3/search', {
                     params: {
                         part: 'snippet',
-                        q: query,
+                        q: `${query} news intelligence analysis`,
                         maxResults: 3,
                         type: 'video',
+                        order: 'relevance',
+                        relevanceLanguage: 'en',
+                        safeSearch: 'moderate',
                         key: YOUTUBE_API_KEY
                     }
                 });

@@ -121,20 +121,41 @@ async def search_rag(request: SearchRAGRequest):
         logger.info(f"Indexing {len(texts)} articles into temporary store...")
         temp_store.add_texts(texts, metadata)
         
-        # Search for top 10 relevant chunks to ensure broad context
-        results = temp_store.search(request.query, k=10)
+        # Search for top 15 chunks to have a wide selection
+        results = temp_store.search(request.query, k=15)
         
         if not results:
             logger.warning("No relevant insights found in articles.")
             return {"summary": ["No relevant insights found in articles."], "top_ids": [], "language": request.language}
             
-        context_text = " ".join([r['chunk'] for r in results])
-        logger.info(f"Synthesizing high-density intelligence for query...")
+        # Strategy: Ensure we pick chunks from 5 different articles for diversity
+        selected_chunks = []
+        seen_article_ids = set()
+        top_ids = []
+        
+        # Sort results by distance (lower is better for L2)
+        sorted_results = sorted(results, key=lambda x: x['distance'])
+        
+        for r in sorted_results:
+            a_id = r['metadata']['id']
+            # If we haven't seen this article yet, or we need more variety
+            if a_id not in seen_article_ids and len(seen_article_ids) < 5:
+                seen_article_ids.add(a_id)
+                top_ids.append(a_id)
+                selected_chunks.append(r['chunk'])
+            elif a_id in seen_article_ids and len(selected_chunks) < 10:
+                # Add secondary chunks from already selected articles to reach 10
+                selected_chunks.append(r['chunk'])
+        
+        context_text = " ".join(selected_chunks)
+        logger.info(f"Synthesizing diverse intelligence from {len(seen_article_ids)} articles...")
+        
+        # Using the upgraded local Large model
         bullet_points = summarize_text(
             context_text, 
             max_length=450, 
-            min_length=200,
-            prompt_prefix=f"Synthesize a detailed strategic intelligence report on '{request.query}' with AT LEAST 5 bullet points. Focus on facts, trends, and business impact from these news sources: "
+            min_length=150,
+            prompt_prefix=f"### INSTRUCTIONS: Analyze and synthesize a professional strategic intelligence report on '{request.query}' using at least 5-8 distinct points. Do NOT repeat these instructions. ### SOURCE NEWS ARTICLES: "
         )
         
         # Translation Step

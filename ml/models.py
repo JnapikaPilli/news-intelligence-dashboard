@@ -124,11 +124,14 @@ def translate_text(text: str, target_lang: str) -> str:
 def get_summarizer():
     global _model, _tokenizer
     if _model is None or _tokenizer is None:
-        # Upgrading to FLAN-T5-Base for significantly better reasoning
-        logger.info(f"Loading Professional AI (google/flan-t5-base) on {device}...")
-        model_name = "google/flan-t5-base"
+        # Upgrading to FLAN-T5-Large for elite reasoning and high-density synthesis
+        logger.info(f"Loading Elite Local AI (google/flan-t5-large) on {device}...")
+        model_name = "google/flan-t5-large"
         _tokenizer = AutoTokenizer.from_pretrained(model_name)
-        _model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
+        _model = AutoModelForSeq2SeqLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float16 if device == "cuda" else torch.float32
+        ).to(device)
     return _model, _tokenizer
 
 def get_ocr_model():
@@ -318,9 +321,9 @@ def summarize_text(text: str, max_length: int = 500, min_length: int = 200, prom
         **inputs, 
         max_length=max_length, 
         min_length=min(min_length, 50), # Adaptive minimum to prevent hanging
-        num_beams=4,
+        num_beams=5,
         no_repeat_ngram_size=3,
-        length_penalty=1.0, # Reduced to prevent over-expansion
+        length_penalty=1.1, 
         early_stopping=True
     )
     summary_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -333,7 +336,9 @@ def summarize_text(text: str, max_length: int = 500, min_length: int = 200, prom
     current_sentence = ""
     for s in raw_sentences:
         s = re.sub(r'[^a-zA-Z0-9\s\.,!\?\'\"-]', '', s).strip()
-        if not s or len(s) < 5: continue
+        # Remove Prompt Echo (prevents instruction repetition)
+        if "###" in s or "instruction" in s.lower() or "provided sources" in s.lower() or "synthesize" in s.lower()[:20]: continue
+        if not s or len(s) < 10: continue
         
         # Stitching
         if current_sentence and (s[0].islower() or len(current_sentence.split()) < 5):
