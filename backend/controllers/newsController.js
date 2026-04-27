@@ -17,29 +17,10 @@ const FEEDS = [
     { url: 'https://www.theverge.com/rss/index.xml', source: 'The Verge', category: 'Technology' }
 ];
 
-const MOCK_NEWS = [
-    {
-        id: "1",
-        title: "AI Breakthrough: New Model Surpasses Human Performance",
-        text: "Researchers have announced a new AI model that consistently outperforms humans on complex reasoning tasks.",
-        source: "Tech Insights",
-        category: "Technology",
-        published_at: new Date().toISOString()
-    },
-    {
-        id: "2",
-        title: "Global Markets Rally Amid Economic Recovery Hopes",
-        text: "Stock markets across the globe saw significant gains today as investors grew optimistic about a steady economic recovery.",
-        source: "Market Watch",
-        category: "Business",
-        published_at: new Date().toISOString()
-    }
-];
-
 exports.getNews = async (req, res, next) => {
     try {
         const now = Date.now();
-        
+
         // Return from cache if it's fresh (under 5 mins)
         if (newsCache.length > 0 && (now - lastFetchTime) < CACHE_DURATION) {
             // Even from cache, we shuffle a bit to keep it fresh
@@ -102,13 +83,13 @@ exports.getNewsById = (req, res, next) => {
     try {
         const { id } = req.params;
         const item = MOCK_NEWS.find(n => n.id === id);
-        
+
         if (!item) {
             const error = new Error("News article not found");
             error.status = 404;
             throw error;
         }
-        
+
         const responseData = {
             id: item.id,
             title: item.title,
@@ -118,7 +99,7 @@ exports.getNewsById = (req, res, next) => {
             category: item.category,
             published_at: item.published_at
         };
-        
+
         res.status(200).json(responseData);
     } catch (error) {
         next(error);
@@ -148,10 +129,10 @@ exports.searchNews = async (req, res, next) => {
                         apikey: NEWS_API_KEY
                     }
                 });
-                
+
                 // NewsData.io returns 'results' instead of 'articles'
                 const results = newsResponse.data.results || [];
-                
+
                 // De-duplicate by title
                 const seenTitles = new Set();
                 rawArticles = results.filter(article => {
@@ -175,8 +156,8 @@ exports.searchNews = async (req, res, next) => {
         if (rawArticles.length === 0) {
             console.log("No API results, falling back to mock data for query:", query);
             const q = query.toLowerCase();
-            rawArticles = MOCK_NEWS.filter(article => 
-                article.title.toLowerCase().includes(q) || 
+            rawArticles = MOCK_NEWS.filter(article =>
+                article.title.toLowerCase().includes(q) ||
                 article.text.toLowerCase().includes(q) ||
                 article.category.toLowerCase().includes(q)
             ).map((article, idx) => ({
@@ -196,7 +177,7 @@ exports.searchNews = async (req, res, next) => {
         // 3. Process with RAG (Selection + Synthesis)
         let finalArticles = [];
         let globalSummary = ["Gathering insights from across multiple sources..."];
-        
+
         if (rawArticles.length > 0) {
             try {
                 const { language } = req.body;
@@ -205,11 +186,11 @@ exports.searchNews = async (req, res, next) => {
                     articles: rawArticles.map(a => ({ id: a.id, text: `${a.title}. ${a.content || a.description}` })),
                     language: language || 'en'
                 }, { timeout: 60000 });
-                
+
                 if (ragResponse.data) {
                     globalSummary = ragResponse.data.summary;
                     const topIds = ragResponse.data.top_ids || [];
-                    
+
                     // Filter and map only the articles selected by RAG
                     finalArticles = rawArticles
                         .filter(a => topIds.includes(a.id))
@@ -220,7 +201,7 @@ exports.searchNews = async (req, res, next) => {
                             url: a.url,
                             published_at: a.published_at
                         }));
-                    
+
                     // Limit to 5 as requested
                     finalArticles = finalArticles.slice(0, 5);
                 }
@@ -252,7 +233,7 @@ exports.searchNews = async (req, res, next) => {
                         key: YOUTUBE_API_KEY
                     }
                 });
-                
+
                 if (ytResponse.data && ytResponse.data.items) {
                     finalVideos = ytResponse.data.items.map(item => ({
                         title: item.snippet.title,
