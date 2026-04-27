@@ -41,7 +41,7 @@ export default function Sidebar() {
           <FileText size={20} className="group-hover:scale-110 transition-transform" />
           <span>Doc Q&A</span>
         </NavLink>
-        
+{/*         
         <NavLink 
           to="/analytics" 
           className={({ isActive }) => clsx(
@@ -54,7 +54,7 @@ export default function Sidebar() {
         >
           <BarChart2 size={20} />
           <span>Analytics</span>
-        </NavLink>
+        </NavLink> */}
       </div>
 
       <div className="p-4 mt-auto">

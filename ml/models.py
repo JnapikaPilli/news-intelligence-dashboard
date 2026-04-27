@@ -101,16 +101,29 @@ def translate_text(text: str, target_lang: str) -> str:
 
         translated_lines = []
         for line in lines:
-            # Dravidian model (en-dra) used for Ta/Te requires specific prefixes
-            clean_line = line
-            if target_lang == "te":
-                clean_line = f">>tel<< {line}"
-            elif target_lang == "ta":
-                clean_line = f">>tam<< {line}"
-                
-            inputs = tokenizer(clean_line, return_tensors="pt", padding=True, truncation=True).to(device)
-            translated = model.generate(**inputs, max_length=512)
-            translated_lines.append(tokenizer.decode(translated[0], skip_special_tokens=True))
+            # Further split long lines into sentences to maintain full fidelity
+            # This ensures the model doesn't 'skip' parts of long bullets
+            sentences = [s.strip() for s in line.split(". ") if s.strip()]
+            translated_sentences = []
+            
+            for sentence in sentences:
+                clean_sentence = sentence
+                if target_lang == "te":
+                    clean_sentence = f">>tel<< {sentence}"
+                elif target_lang == "ta":
+                    clean_sentence = f">>tam<< {sentence}"
+                    
+                inputs = tokenizer(clean_sentence, return_tensors="pt", padding=True, truncation=True).to(device)
+                translated = model.generate(
+                    **inputs, 
+                    max_length=512, 
+                    num_beams=4, 
+                    early_stopping=True
+                )
+                translated_sentences.append(tokenizer.decode(translated[0], skip_special_tokens=True))
+            
+            # Re-join sentences for this bullet point
+            translated_lines.append(". ".join(translated_sentences))
             
         # Re-join with the original bullet character
         if prefix:
